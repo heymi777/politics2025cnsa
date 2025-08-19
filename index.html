@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Student Diary - Cloud</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    input, select, textarea, button { margin: 5px 0; display: block; width: 100%; }
+    #entries { margin-top: 20px; }
+    .entry { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Student Diary (Cloud Version)</h1>
+
+  <label>Backend URL: <input id="backendUrl"></label>
+  <button onclick="saveBackendUrl()">Save Backend URL</button>
+
+  <h2>Register / Login</h2>
+  <input id="name" placeholder="Name">
+  <input id="password" placeholder="Password" type="password">
+  <button onclick="register()">Register</button>
+  <button onclick="login()">Login</button>
+
+  <h2>New Entry</h2>
+  <input id="date" type="date">
+  <select id="cat">
+    <option>선거 관리</option>
+    <option>역사와 국제 관계</option>
+    <option>공공 외교</option>
+    <option>분쟁</option>
+    <option>기타</option>
+  </select>
+  <input id="relDate" type="date" placeholder="Related date">
+  <input id="tags" placeholder="Tags (comma separated)">
+  <textarea id="body" placeholder="Write here..."></textarea>
+  <button onclick="saveEntry()">Save Entry</button>
+
+  <h2>Your Entries</h2>
+  <button onclick="loadEntries()">Refresh</button>
+  <div id="entries"></div>
+
+<script>
+let backendUrl = localStorage.getItem("backendUrl") || "";
+document.getElementById("backendUrl").value = backendUrl;
+let currentUser = null;
+
+function sha256(str) {
+  const buffer = new TextEncoder("utf-8").encode(str);
+  return crypto.subtle.digest("SHA-256", buffer).then(h => {
+    return Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2, "0")).join("");
+  });
+}
+
+function saveBackendUrl() {
+  backendUrl = document.getElementById("backendUrl").value;
+  localStorage.setItem("backendUrl", backendUrl);
+  alert("Saved backend URL!");
+}
+
+async function register() {
+  const name = document.getElementById("name").value;
+  const pass = document.getElementById("password").value;
+  const passHash = await sha256(pass);
+  const res = await fetch(backendUrl, {
+    method: "POST",
+    body: JSON.stringify({action:"register", name, passHash})
+  });
+  const data = await res.json();
+  alert(JSON.stringify(data));
+}
+
+async function login() {
+  const name = document.getElementById("name").value;
+  const pass = document.getElementById("password").value;
+  const passHash = await sha256(pass);
+  const res = await fetch(backendUrl, {
+    method: "POST",
+    body: JSON.stringify({action:"login", name, passHash})
+  });
+  const data = await res.json();
+  if (data.ok) {
+    currentUser = name;
+    alert("Logged in!");
+  } else {
+    alert("Login failed!");
+  }
+}
+
+async function saveEntry() {
+  if (!currentUser) return alert("Login first!");
+  const entry = {
+    id: Date.now().toString(),
+    author: currentUser,
+    date: document.getElementById("date").value,
+    cat: document.getElementById("cat").value,
+    relDate: document.getElementById("relDate").value,
+    tags: document.getElementById("tags").value.split(","),
+    body: document.getElementById("body").value
+  };
+  const res = await fetch(backendUrl, {
+    method:"POST",
+    body: JSON.stringify({action:"saveEntry", entry})
+  });
+  const data = await res.json();
+  alert(JSON.stringify(data));
+}
+
+async function loadEntries() {
+  if (!currentUser) return alert("Login first!");
+  const res = await fetch(backendUrl, {
+    method:"POST",
+    body: JSON.stringify({action:"getEntries", author: currentUser})
+  });
+  const data = await res.json();
+  const div = document.getElementById("entries");
+  div.innerHTML = "";
+  if (data.entries) {
+    data.entries.forEach(e => {
+      const el = document.createElement("div");
+      el.className="entry";
+      el.innerHTML = `<b>${e.date} (${e.cat})</b><br>${e.body}`;
+      div.appendChild(el);
+    });
+  }
+}
+</script>
+</body>
+</html>
